@@ -1,0 +1,83 @@
+@baseUrl = http://localhost:5171
+
+### L01 · menu
+GET {{baseUrl}}/api/menu
+
+### L01 · bookings
+GET {{baseUrl}}/api/bookings
+
+
+### L02 · ask — Temperature 0 (run 3 times, compare the answers)
+POST {{baseUrl}}/api/diagnostics/ai/ask
+Content-Type: application/json
+
+{
+  "message": "Suggest a name for a new Georgian dish.",
+  "temperature": 0
+}
+
+### L02 · ask — high Temperature (run 3 times, compare with the one above)
+POST {{baseUrl}}/api/diagnostics/ai/ask
+Content-Type: application/json
+
+{
+  "message": "Suggest a name for a new Georgian dish.",
+  "temperature": 1.5
+}
+
+### L02 · ask — MaxOutputTokens 50 (finishReason = length)
+POST {{baseUrl}}/api/diagnostics/ai/ask
+Content-Type: application/json
+
+{
+  "message": "Explain how khinkali is made.",
+  "maxOutputTokens": 50
+}
+
+### L02 · chat — a normal question
+POST {{baseUrl}}/api/diagnostics/ai/chat
+Content-Type: application/json
+
+{
+  "message": "Until what time are you open?"
+}
+
+### L02 · chat — another topic (should politely decline)
+POST {{baseUrl}}/api/diagnostics/ai/chat
+Content-Type: application/json
+
+{
+  "message": "Write me a poem about the sea."
+}
+
+### L02 · chat — a price question (should not invent a price)
+POST {{baseUrl}}/api/diagnostics/ai/chat
+Content-Type: application/json
+
+{
+  "message": "How much is khinkali?"
+}
+
+### L02 · sentiment — Positive
+POST {{baseUrl}}/api/diagnostics/ai/sentiment
+Content-Type: application/json
+
+{
+  "message": "Everything was perfect, we'll definitely come back!"
+}
+
+### L02 · sentiment — Negative
+POST {{baseUrl}}/api/diagnostics/ai/sentiment
+Content-Type: application/json
+
+{
+  "message": "The waiter was rude and the mtsvadi was burnt."
+}
+
+### L02 · sentiment — Mixed
+POST {{baseUrl}}/api/diagnostics/ai/sentiment
+Content-Type: application/json
+
+{
+  "message": "Great wine, but the music was too loud."
+}

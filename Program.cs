@@ -1,23 +1,11 @@
-using Microsoft.EntityFrameworkCore;
-using RestaurantApi.Data;
+using RestaurantApi.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
-builder.Services.AddOpenApi();
-builder.Services.AddProblemDetails();
-
-builder.Services.AddDbContext<DataContext>(options => options
-    .UseNpgsql(builder.Configuration.GetConnectionString("Default"))
-    .UseSeeding((context, _) => DataSeed.SeedBookings(context)));
+builder.Services.AddServices(builder.Configuration);
 
 var app = builder.Build();
 
-app.UseExceptionHandler();
-
-app.MapOpenApi();
-app.UseSwaggerUI();
-
-app.MapControllers();
+app.UseApplication();
 
 app.Run();

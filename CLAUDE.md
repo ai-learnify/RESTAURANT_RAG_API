@@ -11,7 +11,7 @@ The owner (Gocha) is writing this himself to practise before teaching.
 - **Talk to me in English.** Code, comments, prompts, data, commit messages and docs are in **English** too.
 - **Propose first, then act.** Before each step say in 1–3 lines what you'll change and why; edit files only after I say go. Small steps — one file or one endpoint at a time.
 - **Explain briefly as you go** — the reason, not a lecture. I know .NET well; I'm practising the AI parts.
-- **Stay in the current lecture.** Never add something that a later lecture introduces (e.g. no DI in lecture 2, no `CancellationToken` plumbing before lecture 6, no pgvector before lecture 10). Some code is *intentionally* naive at first and fixed later — that's the point of the history.
+- **Stay in the current lecture.** Never add something that a later lecture introduces (e.g. no structured output in lecture 2, no `CancellationToken` plumbing before lecture 6, no pgvector before lecture 10). Some code is *intentionally* naive at first and fixed later — that's the point of the history.
 - **Build after every step** (`dotnet build`). Run and test with the requests in `requests.http` before saying a step is done.
 - **I run migrations, docker and git myself.** Never run `dotnet ef` (migrations add / database update), `docker` / `docker compose`, or `git commit` / tag / push — give me the exact command instead.
 - At the end of a lecture, propose the commit message and the tag.
@@ -31,7 +31,7 @@ The owner (Gocha) is writing this himself to practise before teaching.
 - **Simple and clean.** Logic lives in the controllers. No Clean Architecture, MediatR, VSA, repositories, services-for-everything, Result types or Semantic Kernel. A separate class only when several controllers use it or it is a real service on its own. Explicit beats clever.
 - **Realistic, professional names.** No "Lab", "Playground" or toy names.
 - **A file appears in its final place from the first lecture** and is never moved or renamed later. No "cleanup" at the end.
-- ⭐ = "if there's time left": optional. ⭐ code does **not** go into the main history, and later lectures never depend on it.
+- ⭐ = "if there's time left": optional in the lecture. ⭐ code **stays in the code**, marked with a `// Bonus – …` comment above it; the lecturer decides whether to write it live.
 
 ## Final structure (lecture where it appears in brackets)
 
@@ -40,14 +40,14 @@ The owner (Gocha) is writing this himself to practise before teaching.
 ```
 Controllers/
   AssistantController       api/assistant
-                            POST chat (02) · GET chat/stream (06)
+                            GET chat/stream (06)
                             04 tools (CreateChatOptions) · 07 history (ConversationId) · 11 RAG (sources) · 12 Category
-  FeedbackController        POST api/feedback/sentiment, action AnalyzeSentiment (02 few-shot · 03 enum)
   +BookingsController       POST api/bookings/parse, action Parse (03)
   +MenuController           POST api/menu/embeddings (GenerateEmbeddings) · GET api/menu/search?query= (Search)
                             09: vectors in a static in-memory list · 10: in the database (pgvector)
   DocumentsController       POST api/documents (Upload) · GET api/documents/search?query= (11; 12 + category)
-  AiDiagnosticsController   api/diagnostics/ai: ask (02) · stream-timing (06) · embed, similarity (09)
+  AiDiagnosticsController   api/diagnostics/ai: ask, chat, sentiment ⭐ (02; 03 sentiment → enum)
+                            · stream-timing (06) · embed, similarity (09)
   EvaluationController      api/evaluation: retrieval (hit@3, MRR) · groundedness (12)
 Ai/
   Middleware/   InputGuardChatClient (05), UsageTrackingChatClient (05 log → 08 database),
@@ -61,21 +61,23 @@ Ai/
 Entities/       +Product, +Table, +Booking, Message (07), AiUsage (08), Product (10: Embedding, EmbeddingModel),
                 Document, Chunk (11; 12: Category, SearchVector)
 Data/           +DataContext, +DataSeed — new DbSets: Messages, AiUsages, Documents, Chunks
-Dtos/
-  Assistant/ChatDtos.cs          ChatRequest(Guid? ConversationId, string Message, string? Category = null),
-                                 ChatReply(Guid ConversationId, string Text, List<ChatSource> Sources), ChatSource(int Number, string File, int Page)
-  Feedback/SentimentDtos.cs      SentimentRequest(string Text), SentimentResponse(string Sentiment), enum Sentiment
-  Bookings/BookingParseDtos.cs   BookingParseRequest(string Text), BookingDetails(DateTime? At, int? Guests)
-  Diagnostics/PromptDtos.cs      PromptRequest(string Prompt, float? Temperature, int? MaxOutputTokens), PromptResponse
-  Diagnostics/EmbeddingDtos.cs   EmbedRequest/EmbedResponse, SimilarityRequest(First, Second)/SimilarityResponse
-  Menu/MenuSearchDtos.cs         MenuMatch(string Name, double Score), EmbeddingsResult(int Count)
-  Documents/DocumentDtos.cs      DocumentUploaded(int Id, int Chunks), ChunkMatch(File, Page, Content, double Score)
-  Evaluation/EvaluationDtos.cs   GoldenItem, RetrievalReport, GroundednessRequest, GroundednessReport
+Contracts/      one record per file: Contracts/<Feature>/<Name>.cs
+  Diagnostics/   AskRequest(string Message, float? Temperature, int? MaxOutputTokens), AskResponse (02),
+                 ChatRequest(string Message) (02; 07 + Guid? ConversationId; 12 + string? Category = null),
+                 ChatReply(string Text) (02; 07 + Guid ConversationId; 11 + List<ChatSource> Sources), ChatSource(int Number, string File, int Page) (11),
+                 SentimentRequest(string Message), SentimentResponse(string Text) (02), enum Sentiment (03),
+                 EmbedRequest/EmbedResponse, SimilarityRequest(First, Second)/SimilarityResponse (09)
+  Bookings/      BookingParseRequest(string Text), BookingDetails(DateTime? At, int? Guests) (03)
+  Menu/          MenuMatch(string Name, double Score), EmbeddingsResult(int Count) (09)
+  Documents/     DocumentUploaded(int Id, int Chunks), ChunkMatch(File, Page, Content, double Score) (11)
+  Evaluation/    GoldenItem, RetrievalReport, GroundednessRequest, GroundednessReport (12)
+Extensions/     ServiceExtensions (AddServices), ApplicationExtensions (UseApplication) — Program.cs stays three lines (02)
 golden.json (12)
 ```
 
-- The records show their **final** shape; fields are added lecture by lecture: `ChatRequest` gets `ConversationId` in 07 and `Category` in 12; `ChatReply` gets `ConversationId` in 07 and `Sources` in 11.
-- DTOs always live in `Dtos/<Feature>/`, never inside a controller.
+- Fields are added lecture by lecture, as shown in brackets.
+- DTOs always live in `Contracts/<Feature>/`, one record per file, never inside a controller.
+- From lecture 2 on, `ask`, `chat` and `sentiment` live in `AiDiagnosticsController`. Where later chat features (tools, history, RAG) go is decided when we get there — update this tree then.
 
 ## Decisions that must not come back
 
@@ -85,12 +87,13 @@ golden.json (12)
 - ❌ A `MenuIndex` singleton. ✅ 09: a `static` list in `MenuController`; 10: the database.
 - ❌ `wwwroot/chat.html` + `UseStaticFiles`. ✅ 06 ⭐: a separate `chat.html` outside the project (Live Server) + a CORS policy.
 - ❌ Tool calls or token counts in API responses. ✅ In the log: `Tools called: ...` (04); tokens through `UsageTrackingChatClient` (05/08).
-- ❌ Old names: `AskRequest`/`AskResponse`, `ChatToolOptions`, `TokenCounterChatClient`, `EmbeddingText`, `PdfText`, `ChatMessageRecord`, `AiUsageRecord`, `DocumentChunk`, `FoundChunk`, `BookingRequest`, `HybridSearchAsync`, `SearchChunksAsync`, `/api/ai-lab/...`.
+- ❌ Old names: `ChatToolOptions`, `TokenCounterChatClient`, `EmbeddingText`, `PdfText`, `ChatMessageRecord`, `AiUsageRecord`, `DocumentChunk`, `FoundChunk`, `BookingRequest`, `HybridSearchAsync`, `SearchChunksAsync`, `/api/ai-lab/...`.
 
 ## Conventions
 
 - `Data/` holds **only** `DataContext` and `DataSeed` (seed data as its own static class). Entities go in `Entities/` (namespace `RestaurantApi.Entities`).
 - Entities are plain POCOs — **no** data annotations (`[Column]`, `[Precision]`, `[Key]`…). Column types, precision, indexes and seed are configured in `OnModelCreating` (Fluent API) — including `jsonb`, `vector(768)`, the tsvector column and HNSW/GIN indexes.
+- Service registration and the HTTP pipeline live in `Extensions/ServiceExtensions.cs` (`AddServices`) and `Extensions/ApplicationExtensions.cs` (`UseApplication`); `Program.cs` only calls them.
 - My style: **primary constructors** (`public sealed class MenuController(DataContext context) : ControllerBase`), no `private readonly` fields; `sealed` classes; `var`; attributes combined on one line (`[ApiController, Route("api/menu")]`); `DataContext` used directly.
 - The EF Core context is always named **`DataContext`** (`Data/DataContext.cs`) — never `AppDbContext`.
 - Records for DTOs.
@@ -127,18 +130,17 @@ golden.json (12)
 
 ## Lecture 2 · First call and prompts → `lecture-02`
 
-- Packages: `Microsoft.Extensions.AI`, `Google.GenAI`. User Secrets with `Gemini:ApiKey`.
-- The client is created **in each controller's constructor** for now — `new Client(apiKey: config["Gemini:ApiKey"]).AsIChatClient("gemini-3.8-flash")`. Intentionally wrong; lecture 3 fixes it.
-- `AiDiagnosticsController` · `POST api/diagnostics/ai/ask` — `PromptRequest(Prompt, Temperature, MaxOutputTokens)` → `ChatOptions`; returns `PromptResponse` (text, finishReason, input/output/reasoning tokens, static `From(ChatResponse)`). Token counts are fine here: it's the diagnostics endpoint.
-- `AssistantController` · `POST api/assistant/chat` — `ChatRequest(Message)` → `ChatReply(Text)`. System prompt from a template (`RestaurantName = "Supra"`, `OpenHours`), 4 parts: role, topics, answer form, boundary.
-- `FeedbackController` · `POST api/feedback/sentiment` (`AnalyzeSentiment`) — few-shot: System + 3 User/Assistant pairs (Positive / Negative / Mixed), answer is one word. `SentimentRequest(Text)` → `SentimentResponse(Sentiment)`.
+- Packages: `Microsoft.Extensions.AI`, `Google.GenAI`. User Secrets with `Gemini:ApiKey`; `Gemini:Model` in `appsettings.json`.
+- DI from the start (students already know DI): `ServiceExtensions.AddServices` registers `services.AddChatClient(new Client(apiKey: config["Gemini:ApiKey"]!).AsIChatClient(config["Gemini:Model"]))`; `AiDiagnosticsController(IChatClient chat)`.
+- `POST api/diagnostics/ai/ask` — `AskRequest(Message, Temperature, MaxOutputTokens)` → `ChatOptions`; returns `AskResponse(Text, InputTokens, OutputTokens, ReasoningTokens, Reason)` with static `From(ChatResponse)`. Token counts are fine here: it's the diagnostics endpoint.
+- `POST api/diagnostics/ai/chat` — `ChatRequest(Message)` → `ChatReply(Text)`. System prompt (`SystemPrompt` constant): Supra assistant, topics (menu, bookings, hours 12:00–23:00), answer form (≤ 3 sentences, guest's language), boundary (decline other topics, never invent prices).
+- ⭐ `POST api/diagnostics/ai/sentiment` (`AnalyzeSentiment`) — few-shot: System + 3 User/Assistant pairs (Positive / Negative / Mixed), answer is one word. `SentimentRequest(Message)` → `SentimentResponse(Text)`.
 - Test: chat — a normal question, another topic (a poem), a price question; `ask` with Temperature 0 three times; `MaxOutputTokens = 50` → empty answer because thinking ate the limit.
 
 ## Lecture 3 · DI and structured output → `lecture-03`
 
-- `Program.cs`: register the client with `AddChatClient(...)` (Singleton); `Gemini:Model` from appsettings, the key from secrets, both with `?? throw new InvalidOperationException("Gemini:ApiKey is missing")`.
-- Controllers receive `IChatClient` in the constructor — no `new`.
-- `AnalyzeSentiment` → `GetResponseAsync<Sentiment>` with the enum, no few-shot; return the enum's name.
+- `ServiceExtensions`: replace `config["Gemini:ApiKey"]!` with `?? throw new InvalidOperationException("Gemini:ApiKey is missing")` (same for `Gemini:Model`).
+- `AiDiagnosticsController.AnalyzeSentiment` → `GetResponseAsync<Sentiment>` with the enum, no few-shot; return the enum's name.
 - `BookingsController` · `POST api/bookings/parse` (`Parse`) — `BookingParseRequest(Text)` → `BookingDetails([property: Description("Booking date and time")] DateTime? At, [property: Description("Number of guests")] int? Guests)`. System: extract the booking, "Today is {DateTime.Now:yyyy-MM-dd, dddd}.", "Leave null whatever is not in the text". Validation in C#: null → `BadRequest("Which day and what time?")` / `BadRequest("How many of you?")`, outside 12:00–23:00 → `BadRequest("We're open 12:00–23:00")`.
 - Test: "There are four of us, tomorrow at 8" · "I'd like a table on Saturday evening" · "How much is khinkali?".
 
@@ -147,7 +149,7 @@ golden.json (12)
 - `Ai/Tools/RestaurantTools.cs` (constructor takes `DataContext`):
   - `GetMenu()` → `List<MenuItemInfo(Name, Price)>`, `[Description("Returns the restaurant menu: dish name and price in GEL")]`
   - `CheckAvailability(DateTime at, int guests)` → `AvailabilityInfo(bool Available, int FreeTables)`: tables with enough seats and no booking within ±2 hours. `[Description]` on the method and both parameters. Read-only.
-- `Program.cs`: `RestaurantTools` as Scoped; `.UseFunctionInvocation()` on the chat client builder.
+- `ServiceExtensions`: `RestaurantTools` as Scoped; `.UseFunctionInvocation()` on the chat client builder.
 - `AssistantController.Chat`: options from `CreateChatOptions()` — `Tools = [AIFunctionFactory.Create(tools.GetMenu), AIFunctionFactory.Create(tools.CheckAvailability)]`; System: "You are a restaurant assistant. Answer briefly. Take menu and free-table data only from the tools, don't make anything up. Today is …". Tool calls are **logged** (`Tools called: ...`), not returned.
 - Test: "There are four of us, tomorrow at 8 — do you have a table?" · "How much is lobio?" · "Hi, until what time are you open?" · "Two of us are coming on Saturday at 7. What vegetarian dishes do you have?".
 
@@ -222,7 +224,7 @@ golden.json (12)
 
 ## Known traps
 
-- L03: the `Model` (appsettings) and `ApiKey` (secrets) merge into one `Gemini` section — read both via `IConfiguration`.
+- L02: the `Model` (appsettings) and `ApiKey` (secrets) merge into one `Gemini` section — read both via `IConfiguration`.
 - L07: without `AllowOutOfOrderMetadataProperties` deserializing from jsonb fails.
 - L08: Google.GenAI's own retry + the resilience handler = multiplied retries.
 - L10: a different PostgreSQL major version can't read the old volume.
