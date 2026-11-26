@@ -17,7 +17,7 @@ public static class ServiceExtensions
             .UseNpgsql(config.GetConnectionString("Default"))
             .UseSeeding((context, _) => DataSeed.SeedBookings(context)));
 
-        services.AddChatClient(new Client(apiKey: config["Gemini:ApiKey"]!).AsIChatClient(config["Gemini:Model"]));
+        services.AddChatClient(new Client(apiKey: config["Gemini:ApiKey"]!).AsIChatClient(config["Gemini:LiteModel"]));
 
         return services;
     }

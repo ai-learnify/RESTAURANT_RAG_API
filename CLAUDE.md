@@ -46,7 +46,8 @@ Controllers/
   +MenuController           POST api/menu/embeddings (GenerateEmbeddings) · GET api/menu/search?query= (Search)
                             09: vectors in a static in-memory list · 10: in the database (pgvector)
   DocumentsController       POST api/documents (Upload) · GET api/documents/search?query= (11; 12 + category)
-  AiDiagnosticsController   api/diagnostics/ai: ask, chat, sentiment ⭐ (02; 03 sentiment → enum)
+  FeedbackController        api/feedback/ai: POST sentiment, action AnalyzeSentiment (03 enum, no few-shot)
+  AiDiagnosticsController   api/diagnostics/ai: ask, chat (02) · sentiment ⭐ few-shot (02 only; 03 moves it to FeedbackController)
                             · stream-timing (06) · embed, similarity (09)
   EvaluationController      api/evaluation: retrieval (hit@3, MRR) · groundedness (12)
 Ai/
@@ -65,19 +66,20 @@ Contracts/      one record per file: Contracts/<Feature>/<Name>.cs
   Diagnostics/   AskRequest(string Message, float? Temperature, int? MaxOutputTokens), AskResponse (02),
                  ChatRequest(string Message) (02; 07 + Guid? ConversationId; 12 + string? Category = null),
                  ChatReply(string Text) (02; 07 + Guid ConversationId; 11 + List<ChatSource> Sources), ChatSource(int Number, string File, int Page) (11),
-                 SentimentRequest(string Message), SentimentResponse(string Text) (02), enum Sentiment (03),
                  EmbedRequest/EmbedResponse, SimilarityRequest(First, Second)/SimilarityResponse (09)
-  Bookings/      BookingParseRequest(string Text), BookingDetails(DateTime? At, int? Guests) (03)
+  Feedback/      SentimentRequest(string Message), SentimentResponse(string Text) (02 in Diagnostics/, 03 moved here)
+  Bookings/      BookingParseRequest(string Message), BookingParseResponse(DateTime? At, int? Guests) (03) — also the model's output schema
   Menu/          MenuMatch(string Name, double Score), EmbeddingsResult(int Count) (09)
   Documents/     DocumentUploaded(int Id, int Chunks), ChunkMatch(File, Page, Content, double Score) (11)
   Evaluation/    GoldenItem, RetrievalReport, GroundednessRequest, GroundednessReport (12)
+Enums/          Sentiment { Positive, Negative, Mixed } (03)
 Extensions/     ServiceExtensions (AddServices), ApplicationExtensions (UseApplication) — Program.cs stays three lines (02)
 golden.json (12)
 ```
 
 - Fields are added lecture by lecture, as shown in brackets.
 - DTOs always live in `Contracts/<Feature>/`, one record per file, never inside a controller.
-- From lecture 2 on, `ask`, `chat` and `sentiment` live in `AiDiagnosticsController`. Where later chat features (tools, history, RAG) go is decided when we get there — update this tree then.
+- `ask` and `chat` live in `AiDiagnosticsController` (02); `sentiment` moves to `FeedbackController` in 03. Where later chat features (tools, history, RAG) go is decided when we get there — update this tree then.
 
 ## Decisions that must not come back
 
@@ -97,8 +99,8 @@ golden.json (12)
 - My style: **primary constructors** (`public sealed class MenuController(DataContext context) : ControllerBase`), no `private readonly` fields; `sealed` classes; `var`; attributes combined on one line (`[ApiController, Route("api/menu")]`); `DataContext` used directly.
 - The EF Core context is always named **`DataContext`** (`Data/DataContext.cs`) — never `AppDbContext`.
 - Records for DTOs.
-- Configuration: `Gemini:ApiKey` **only** in User Secrets (`dotnet user-secrets set "Gemini:ApiKey" "…"`); `Gemini:Model`, `Gemini:FallbackModel`, `Gemini:EmbeddingModel`, `Rag:MinScore` in `appsettings.json`. Never an environment variable named `GEMINI_API_KEY`, never a key in a tracked file.
-- Chat model: `gemini-3.8-flash`. Embedding model: `gemini-embedding-2`, 768 dimensions.
+- Configuration: `Gemini:ApiKey` **only** in User Secrets (`dotnet user-secrets set "Gemini:ApiKey" "…"`); `Gemini:Model`, `Gemini:LiteModel`, `Gemini:FallbackModel`, `Gemini:EmbeddingModel`, `Rag:MinScore` in `appsettings.json`. Never an environment variable named `GEMINI_API_KEY`, never a key in a tracked file.
+- Chat model: **`gemini-3.1-flash-lite`** (`Gemini:LiteModel`) is the active one — `gemini-3.8-flash` (`Gemini:Model`) kept to try first in class; on the free tier it often returns 503 "high demand". Switch back once there's a paid Gemini plan. Embedding model: `gemini-embedding-2`, 768 dimensions.
 - Restaurant name in prompts: **Supra**, open 12:00–23:00, prices in GEL.
 - All data (seed, prompts, test questions, PDF) in English.
 
@@ -135,14 +137,14 @@ golden.json (12)
 - `POST api/diagnostics/ai/ask` — `AskRequest(Message, Temperature, MaxOutputTokens)` → `ChatOptions`; returns `AskResponse(Text, InputTokens, OutputTokens, ReasoningTokens, Reason)` with static `From(ChatResponse)`. Token counts are fine here: it's the diagnostics endpoint.
 - `POST api/diagnostics/ai/chat` — `ChatRequest(Message)` → `ChatReply(Text)`. System prompt (`SystemPrompt` constant): Supra assistant, topics (menu, bookings, hours 12:00–23:00), answer form (≤ 3 sentences, guest's language), boundary (decline other topics, never invent prices).
 - ⭐ `POST api/diagnostics/ai/sentiment` (`AnalyzeSentiment`) — few-shot: System + 3 User/Assistant pairs (Positive / Negative / Mixed), answer is one word. `SentimentRequest(Message)` → `SentimentResponse(Text)`.
-- Test: chat — a normal question, another topic (a poem), a price question; `ask` with Temperature 0 three times; `MaxOutputTokens = 50` → empty answer because thinking ate the limit.
+- Test: chat — a normal question, another topic (a poem), a price question; `ask` with Temperature 0 three times; `MaxOutputTokens = 50` → with `gemini-3.8-flash`: empty answer because thinking ate the limit; with the lite model (no thinking): cut-off text, finishReason `length`.
 
-## Lecture 3 · DI and structured output → `lecture-03`
+## Lecture 3 · Structured output → `lecture-03`
 
-- `ServiceExtensions`: replace `config["Gemini:ApiKey"]!` with `?? throw new InvalidOperationException("Gemini:ApiKey is missing")` (same for `Gemini:Model`).
-- `AiDiagnosticsController.AnalyzeSentiment` → `GetResponseAsync<Sentiment>` with the enum, no few-shot; return the enum's name.
-- `BookingsController` · `POST api/bookings/parse` (`Parse`) — `BookingParseRequest(Text)` → `BookingDetails([property: Description("Booking date and time")] DateTime? At, [property: Description("Number of guests")] int? Guests)`. System: extract the booking, "Today is {DateTime.Now:yyyy-MM-dd, dddd}.", "Leave null whatever is not in the text". Validation in C#: null → `BadRequest("Which day and what time?")` / `BadRequest("How many of you?")`, outside 12:00–23:00 → `BadRequest("We're open 12:00–23:00")`.
-- Test: "There are four of us, tomorrow at 8" · "I'd like a table on Saturday evening" · "How much is khinkali?".
+- No DI step (done in L02) and no `?? throw` config check (not needed).
+- `Enums/Sentiment.cs`; new `FeedbackController` (`api/feedback/ai`) · `POST sentiment` (`AnalyzeSentiment`) → `GetResponseAsync<Sentiment>` with only a System message, no few-shot; return `response.Result.ToString()` (not `response.Text` — that's the raw `{"data": …}` JSON). On `Negative` it writes `SMS: notify the manager` — the typed result drives code. The L02 few-shot `sentiment` is removed from `AiDiagnosticsController`; its DTOs move to `Contracts/Feedback/`.
+- `BookingsController` · `POST api/bookings/parse` (`Parse`) — `BookingParseRequest(Message)` → `GetResponseAsync<BookingParseResponse>`, where `BookingParseResponse([property: Description("Booking date and time")] DateTime? At, [property: Description("Number of guests")] int? Guests)`. System: extract the booking, "Today is {DateTime.Now:yyyy-MM-dd, dddd}.", "Leave null whatever is not in the message". Validation in C#: `At` null → `BadRequest("Which day and what time?")`, `Hour is < 12 or >= 23` → `BadRequest("We're open 12:00–23:00")`, `Guests` null → `BadRequest("How many of you?")`.
+- Test: "There are four of us, tomorrow at 8" · "I'd like a table on Saturday evening" · "How much is khinkali?" · "Two of us, tomorrow at 23:30".
 
 ## Lecture 4 · Tools (function calling) → `lecture-04`
 
@@ -224,6 +226,8 @@ golden.json (12)
 
 ## Known traps
 
+- L03: `GetResponseAsync<T>` for a non-object `T` (enum) wraps the answer as `{"data": …}` — use `response.Result`, not `response.Text`.
+- L03: the model returns `At` with `Z` (`Kind = Utc`) — fine for `timestamptz`, use it as is. Don't call `ToLocalTime()` (shifts the time and Npgsql rejects `Kind = Local` for `timestamptz`).
 - L02: the `Model` (appsettings) and `ApiKey` (secrets) merge into one `Gemini` section — read both via `IConfiguration`.
 - L07: without `AllowOutOfOrderMetadataProperties` deserializing from jsonb fails.
 - L08: Google.GenAI's own retry + the resilience handler = multiplied retries.

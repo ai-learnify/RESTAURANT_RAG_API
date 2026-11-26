@@ -12,3 +12,7 @@
 - L02: DI from the start — `AddChatClient` + `IChatClient` in the constructor already in L02 (students know DI); the "new Client in the constructor" step is skipped. L03 only adds the `?? throw` config check.
 - ⭐ bonus code stays in the code with a `// Bonus – …` comment, instead of being left out of the history.
 - L02: on 2026-11-26 `gemini-3.8-flash` returned 503 "model is currently experiencing high demand" several times in a row — a real example for L08 (resilience, fallback model).
+- L02/L03: active chat model is `gemini-3.1-flash-lite` (`Gemini:LiteModel`); `gemini-3.8-flash` (`Gemini:Model`) returned 503 ten times in a row on the free tier. In class: try 3.8-flash first, fall back to lite. Lite doesn't think, so the L02 "MaxOutputTokens 50 → empty answer" demo shows cut-off text instead.
+- L03: no `?? throw` config check — skipped on purpose.
+- L03: sentiment moved from `AiDiagnosticsController` to a new `FeedbackController` (`api/feedback/ai/sentiment`); DTOs moved `Contracts/Diagnostics/` → `Contracts/Feedback/`; enum in `Enums/Sentiment.cs`. An exception to "a file never moves".
+- L03: parse output record is `BookingParseResponse` (in `Contracts/Bookings/`), pairs with `BookingParseRequest(Message)` — not `BookingDetails`.

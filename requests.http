@@ -58,26 +58,58 @@ Content-Type: application/json
   "message": "How much is khinkali?"
 }
 
-### L02 · sentiment — Positive
-POST {{baseUrl}}/api/diagnostics/ai/sentiment
+### L03 · sentiment — Positive (enum, no few-shot)
+POST {{baseUrl}}/api/feedback/ai/sentiment
 Content-Type: application/json
 
 {
   "message": "Everything was perfect, we'll definitely come back!"
 }
 
-### L02 · sentiment — Negative
-POST {{baseUrl}}/api/diagnostics/ai/sentiment
+### L03 · sentiment — Negative (logs "SMS: notify the manager")
+POST {{baseUrl}}/api/feedback/ai/sentiment
 Content-Type: application/json
 
 {
   "message": "The waiter was rude and the mtsvadi was burnt."
 }
 
-### L02 · sentiment — Mixed
-POST {{baseUrl}}/api/diagnostics/ai/sentiment
+### L03 · sentiment — Mixed
+POST {{baseUrl}}/api/feedback/ai/sentiment
 Content-Type: application/json
 
 {
   "message": "Great wine, but the music was too loud."
+}
+
+### L03 · parse booking — complete (200)
+POST {{baseUrl}}/api/bookings/parse
+Content-Type: application/json
+
+{
+  "message": "There are four of us, tomorrow at 8"
+}
+
+### L03 · parse booking — no guests (400 "How many of you?")
+POST {{baseUrl}}/api/bookings/parse
+Content-Type: application/json
+
+{
+  "message": "I'd like a table on Saturday evening"
+}
+
+### L03 · parse booking — not a booking (400 "Which day and what time?")
+POST {{baseUrl}}/api/bookings/parse
+Content-Type: application/json
+
+{
+  "message": "How much is khinkali?"
+}
+
+### L03 · parse booking — outside opening hours (400 "We're open 12:00–23:00")
+POST {{baseUrl}}/api/bookings/parse
+Content-Type: application/json
+
+{
+  "message": "Two of us, tomorrow at 23:30"
 }
