@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using RestaurantApi.Extensions;
 using RestaurantApi.Entities;
 
 namespace RestaurantApi.Data;
@@ -48,13 +49,16 @@ public static class DataSeed
 
         if (bookings.Any()) return;
 
-        var tomorrow = DateTime.UtcNow.Date.AddDays(1);
+        var time = TimeProvider.System;
+        var tomorrow = time.GetRestaurantNow().Date.AddDays(1);
+
+        DateTime At(int hour, int minute = 0) => time.ToUtc(tomorrow.AddHours(hour).AddMinutes(minute));
 
         bookings.AddRange(
-            new Booking { TableId = 4, At = tomorrow.AddHours(19), Guests = 4, Name = "Nino" },
-            new Booking { TableId = 5, At = tomorrow.AddHours(19).AddMinutes(30), Guests = 3, Name = "Luka" },
-            new Booking { TableId = 7, At = tomorrow.AddHours(20), Guests = 6, Name = "Giorgi" },
-            new Booking { TableId = 1, At = tomorrow.AddHours(20).AddMinutes(30), Guests = 2, Name = "Ana" }
+            new Booking { TableId = 4, At = At(19), Guests = 4, Name = "Nino" },
+            new Booking { TableId = 5, At = At(19, 30), Guests = 3, Name = "Luka" },
+            new Booking { TableId = 7, At = At(20), Guests = 6, Name = "Giorgi" },
+            new Booking { TableId = 1, At = At(20, 30), Guests = 2, Name = "Ana" }
         );
 
         context.SaveChanges();

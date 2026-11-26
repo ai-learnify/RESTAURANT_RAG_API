@@ -5,7 +5,7 @@ using RestaurantApi.Enums;
 
 namespace RestaurantApi.Controllers;
 
-[ApiController, Route("api/feedback/ai")]
+[ApiController, Route("api/feedback")]
 public sealed class FeedbackController(IChatClient chat) : ControllerBase
 {
     [HttpPost("sentiment")]

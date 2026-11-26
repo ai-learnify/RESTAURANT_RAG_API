@@ -1,4 +1,5 @@
 using RestaurantApi.Contracts.Bookings;
+using RestaurantApi.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.AI;
@@ -8,7 +9,7 @@ using RestaurantApi.Data;
 namespace RestaurantApi.Controllers;
 
 [ApiController, Route("api/bookings")]
-public sealed class BookingsController(DataContext db, IChatClient chat) : ControllerBase
+public sealed class BookingsController(DataContext db, IChatClient chat, TimeProvider time) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<List<Booking>>> GetAll()
@@ -26,7 +27,7 @@ public sealed class BookingsController(DataContext db, IChatClient chat) : Contr
         {
             new(ChatRole.System, $"""
                                   Extract the booking details from the guest's message.
-                                  Today is {DateTime.Now:yyyy-MM-dd, dddd}.
+                                  Now in the restaurant: {time.GetRestaurantNow():yyyy-MM-dd'T'HH:mm:sszzz, dddd}.
                                   Leave null whatever is not in the message.
                                   """),
             new(ChatRole.User, req.Message)

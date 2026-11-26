@@ -40,46 +40,49 @@ The owner (Gocha) is writing this himself to practise before teaching.
 ```
 Controllers/
   AssistantController       api/assistant
-                            GET chat/stream (06)
-                            04 tools (CreateChatOptions) · 07 history (ConversationId) · 11 RAG (sources) · 12 Category
+                            POST chat (04, moved from AiDiagnosticsController; tools) · GET chat/stream (06)
+                            07 history (ConversationId) · 11 RAG (sources) · 12 Category
   +BookingsController       POST api/bookings/parse, action Parse (03)
   +MenuController           POST api/menu/embeddings (GenerateEmbeddings) · GET api/menu/search?query= (Search)
                             09: vectors in a static in-memory list · 10: in the database (pgvector)
   DocumentsController       POST api/documents (Upload) · GET api/documents/search?query= (11; 12 + category)
-  FeedbackController        api/feedback/ai: POST sentiment, action AnalyzeSentiment (03 enum, no few-shot)
-  AiDiagnosticsController   api/diagnostics/ai: ask, chat (02) · sentiment ⭐ few-shot (02 only; 03 moves it to FeedbackController)
+  FeedbackController        api/feedback: POST sentiment, action AnalyzeSentiment (03 enum, no few-shot)
+  AiDiagnosticsController   api/diagnostics/ai: ask (02) · chat (02–03; 04 moves it to AssistantController)
+                            · sentiment ⭐ few-shot (02 only; 03 moves it to FeedbackController)
                             · stream-timing (06) · embed, similarity (09)
   EvaluationController      api/evaluation: retrieval (hit@3, MRR) · groundedness (12)
 Ai/
   Middleware/   InputGuardChatClient (05), UsageTrackingChatClient (05 log → 08 database),
                 FallbackChatClient (08), AiExceptionHandler (08 ⭐)
-  Tools/        RestaurantTools (04: GetMenu, CheckAvailability; 10 ⭐ SearchMenu)
   Chat/         ChatHistoryStore (07), LastTurnsReducer (07 ⭐)
   Embeddings/   EmbeddingInput (09: Query / Document prefixes)
   Documents/    PdfTextReader, TextChunker, DocumentSearch (11: SearchAsync + FormatContext;
                 12: SearchAsync becomes hybrid tsvector + RRF, VectorSearchAsync kept for comparison)
   Diagnostics/  ChaosHandler (08)
+Tools/          MenuTools (GetMenu → "get_menu"), TableTools (CheckAvailability → "check_availability") (04)
+                — the records they return (MenuItemInfo, AvailabilityInfo) live in the same file; 10 ⭐ SearchMenu
 Entities/       +Product, +Table, +Booking, Message (07), AiUsage (08), Product (10: Embedding, EmbeddingModel),
                 Document, Chunk (11; 12: Category, SearchVector)
 Data/           +DataContext, +DataSeed — new DbSets: Messages, AiUsages, Documents, Chunks
 Contracts/      one record per file: Contracts/<Feature>/<Name>.cs
   Diagnostics/   AskRequest(string Message, float? Temperature, int? MaxOutputTokens), AskResponse (02),
-                 ChatRequest(string Message) (02; 07 + Guid? ConversationId; 12 + string? Category = null),
-                 ChatReply(string Text) (02; 07 + Guid ConversationId; 11 + List<ChatSource> Sources), ChatSource(int Number, string File, int Page) (11),
                  EmbedRequest/EmbedResponse, SimilarityRequest(First, Second)/SimilarityResponse (09)
+  Assistant/     ChatRequest(string Message) (02 in Diagnostics/, 04 moved here; 07 + Guid? ConversationId; 12 + string? Category = null),
+                 ChatReply(string Text) (02 in Diagnostics/, 04 moved here; 07 + Guid ConversationId; 11 + List<ChatSource> Sources), ChatSource(int Number, string File, int Page) (11)
   Feedback/      SentimentRequest(string Message), SentimentResponse(string Text) (02 in Diagnostics/, 03 moved here)
-  Bookings/      BookingParseRequest(string Message), BookingParseResponse(DateTime? At, int? Guests) (03) — also the model's output schema
+  Bookings/      BookingParseRequest(string Message), BookingParseResponse(DateTimeOffset? At, int? Guests) (03; 04: DateTime → DateTimeOffset) — also the model's output schema
   Menu/          MenuMatch(string Name, double Score), EmbeddingsResult(int Count) (09)
   Documents/     DocumentUploaded(int Id, int Chunks), ChunkMatch(File, Page, Content, double Score) (11)
   Evaluation/    GoldenItem, RetrievalReport, GroundednessRequest, GroundednessReport (12)
 Enums/          Sentiment { Positive, Negative, Mixed } (03)
 Extensions/     ServiceExtensions (AddServices), ApplicationExtensions (UseApplication) — Program.cs stays three lines (02)
+                TimeProviderExtensions (04: GetRestaurantNow, ToUtc)
 golden.json (12)
 ```
 
 - Fields are added lecture by lecture, as shown in brackets.
 - DTOs always live in `Contracts/<Feature>/`, one record per file, never inside a controller.
-- `ask` and `chat` live in `AiDiagnosticsController` (02); `sentiment` moves to `FeedbackController` in 03. Where later chat features (tools, history, RAG) go is decided when we get there — update this tree then.
+- `ask` and `chat` start in `AiDiagnosticsController` (02); `sentiment` moves to `FeedbackController` in 03, `chat` to `AssistantController` in 04. `AiDiagnosticsController` keeps only diagnostics (`ask`, later `stream-timing`, `embed`, `similarity`).
 
 ## Decisions that must not come back
 
@@ -88,7 +91,7 @@ golden.json (12)
 - ❌ A `GoldenSet` class. ✅ `golden.json` is read directly in `EvaluationController.Retrieval` (`System.IO.File`).
 - ❌ A `MenuIndex` singleton. ✅ 09: a `static` list in `MenuController`; 10: the database.
 - ❌ `wwwroot/chat.html` + `UseStaticFiles`. ✅ 06 ⭐: a separate `chat.html` outside the project (Live Server) + a CORS policy.
-- ❌ Tool calls or token counts in API responses. ✅ In the log: `Tools called: ...` (04); tokens through `UsageTrackingChatClient` (05/08).
+- ❌ Tool calls or token counts in API responses. ✅ Tool calls are not logged by hand (04); see them with the `Microsoft.Extensions.AI` Debug log (05); tokens through `UsageTrackingChatClient` (05/08).
 - ❌ Old names: `ChatToolOptions`, `TokenCounterChatClient`, `EmbeddingText`, `PdfText`, `ChatMessageRecord`, `AiUsageRecord`, `DocumentChunk`, `FoundChunk`, `BookingRequest`, `HybridSearchAsync`, `SearchChunksAsync`, `/api/ai-lab/...`.
 
 ## Conventions
@@ -101,6 +104,7 @@ golden.json (12)
 - Records for DTOs.
 - Configuration: `Gemini:ApiKey` **only** in User Secrets (`dotnet user-secrets set "Gemini:ApiKey" "…"`); `Gemini:Model`, `Gemini:LiteModel`, `Gemini:FallbackModel`, `Gemini:EmbeddingModel`, `Rag:MinScore` in `appsettings.json`. Never an environment variable named `GEMINI_API_KEY`, never a key in a tracked file.
 - Chat model: **`gemini-3.1-flash-lite`** (`Gemini:LiteModel`) is the active one — `gemini-3.8-flash` (`Gemini:Model`) kept to try first in class; on the free tier it often returns 503 "high demand". Switch back once there's a paid Gemini plan. Embedding model: `gemini-embedding-2`, 768 dimensions.
+- **Time:** the database holds **real UTC** (`timestamptz`, `DateTime` with `Kind = Utc`). Humans and the model speak **restaurant time with offset** (`DateTimeOffset`, `+04:00`). Convert at the edge: `time.GetRestaurantNow()` for "now" in prompts, `at.UtcDateTime` before a query, `time.ToUtc(...)` in the seed. `TimeProvider.System` is registered as a Singleton; never `DateTime.Now` (it's UTC on a server).
 - Restaurant name in prompts: **Supra**, open 12:00–23:00, prices in GEL.
 - All data (seed, prompts, test questions, PDF) in English.
 
@@ -148,12 +152,13 @@ golden.json (12)
 
 ## Lecture 4 · Tools (function calling) → `lecture-04`
 
-- `Ai/Tools/RestaurantTools.cs` (constructor takes `DataContext`):
-  - `GetMenu()` → `List<MenuItemInfo(Name, Price)>`, `[Description("Returns the restaurant menu: dish name and price in GEL")]`
-  - `CheckAvailability(DateTime at, int guests)` → `AvailabilityInfo(bool Available, int FreeTables)`: tables with enough seats and no booking within ±2 hours. `[Description]` on the method and both parameters. Read-only.
-- `ServiceExtensions`: `RestaurantTools` as Scoped; `.UseFunctionInvocation()` on the chat client builder.
-- `AssistantController.Chat`: options from `CreateChatOptions()` — `Tools = [AIFunctionFactory.Create(tools.GetMenu), AIFunctionFactory.Create(tools.CheckAvailability)]`; System: "You are a restaurant assistant. Answer briefly. Take menu and free-table data only from the tools, don't make anything up. Today is …". Tool calls are **logged** (`Tools called: ...`), not returned.
-- Test: "There are four of us, tomorrow at 8 — do you have a table?" · "How much is lobio?" · "Hi, until what time are you open?" · "Two of us are coming on Saturday at 7. What vegetarian dishes do you have?".
+- `chat` moves from `AiDiagnosticsController` to the new `AssistantController` (`api/assistant/chat`); `ChatRequest`/`ChatReply` move to `Contracts/Assistant/`. `FeedbackController` route becomes `api/feedback`.
+- `Tools/MenuTools.cs` (`DataContext`): `GetMenu()` → `List<MenuItemInfo(Name, Price)>`, `[Description("Returns the restaurant menu: dish name and price in GEL")]`.
+- `Tools/TableTools.cs` (`DataContext`): `CheckAvailability(DateTimeOffset at, int guests)` → `AvailabilityInfo(bool Available, int FreeTables)`: tables with enough seats and no booking within ±2 hours of `at.UtcDateTime`. `[Description]` on the method and both parameters (`at`: "restaurant time with UTC offset, e.g. 2026-11-28T20:00:00+04:00"). Read-only.
+- `ServiceExtensions`: `MenuTools`, `TableTools` as Scoped; `.UseFunctionInvocation()` on the chat client builder.
+- `AssistantController.Chat`: `Tools = [AIFunctionFactory.Create(menu.GetMenu, name: "get_menu"), AIFunctionFactory.Create(table.CheckAvailability, name: "check_availability")]`. The System prompt doesn't mention the tools (the descriptions are enough); it ends with `Now in the restaurant: {time.GetRestaurantNow():yyyy-MM-dd'T'HH:mm:sszzz, dddd}.` No tool-call logging.
+- **Time — the lecture's problem → fix:** first write `CheckAvailability(DateTime at, …)`. The model sends restaurant time, sometimes with a fake `Z`, sometimes without → Npgsql throws `Cannot write DateTime with Kind=Utc/Unspecified…`, or the check runs on the wrong hour. Fix: `TimeProvider.System` (Singleton) + `Extensions/TimeProviderExtensions.cs` (`GetRestaurantNow()`, `ToUtc()`, zone `Asia/Tbilisi`), `DateTimeOffset` in the tool and in `BookingParseResponse.At`, "now" with offset in both prompts (`Chat`, `Parse`), seed in real UTC (19:00 Tbilisi → `15:00Z`). Reseed after the change.
+- Test: "There are four of us, tomorrow at 8 — do you have a table?" (2 free: tables 6, 8) · "How much is lobio?" (14 GEL) · "Hi, until what time are you open?" (no tool) · "Two of us are coming on Saturday at 7. What vegetarian dishes do you have?" (both tools).
 
 ## Lecture 5 · Pipeline and middleware → `lecture-05`
 
@@ -185,7 +190,7 @@ golden.json (12)
 - `Ai/Diagnostics/ChaosHandler.cs` — test only: 2 of every 3 requests return 503. Register only in Development.
 - `Ai/Middleware/FallbackChatClient.cs` — `DelegatingChatClient`; on a transient error (`catch (ApiException ex) when …` — 429, 5xx, network, timeout) call `Gemini:FallbackModel`; log `"🛟 {Error} — fallback model"`. Innermost layer.
 - `Entities/AiUsage.cs` (Id, At, Model, InputTokens, OutputTokens), `DbSet<AiUsage> AiUsages` + migration; `UsageTrackingChatClient` writes one row per call via `IServiceScopeFactory` (it's a Singleton, `DataContext` is Scoped). SQL for today's cost by model.
-- ⭐ `Ai/Middleware/AiExceptionHandler.cs` — not in the main history.
+- ⭐ `Ai/Middleware/AiExceptionHandler.cs` (marked `// Bonus`).
 
 ## Lecture 9 · Text embeddings → `lecture-09`
 
@@ -203,7 +208,7 @@ golden.json (12)
 - `GenerateEmbeddings` — only products with `Embedding == null`, in batches (`Chunk(n)`), saves to the DB. Remove the static list.
 - `Search` — `OrderBy(p => p.Embedding!.CosineDistance(query))` with a threshold, then an extra filter (max price) in the same SQL.
 - HNSW index with `vector_cosine_ops`; check with `EXPLAIN`.
-- ⭐ `RestaurantTools.SearchMenu` — not in the main history.
+- ⭐ `MenuTools.SearchMenu` (marked `// Bonus`).
 
 ## Lecture 11 · Simple RAG → `lecture-11`
 
@@ -227,7 +232,10 @@ golden.json (12)
 ## Known traps
 
 - L03: `GetResponseAsync<T>` for a non-object `T` (enum) wraps the answer as `{"data": …}` — use `response.Result`, not `response.Text`.
-- L03: the model returns `At` with `Z` (`Kind = Utc`) — fine for `timestamptz`, use it as is. Don't call `ToLocalTime()` (shifts the time and Npgsql rejects `Kind = Local` for `timestamptz`).
+- L04: the model sends times sometimes with a fake `Z`, sometimes without → `Kind = Utc`/`Unspecified` → Npgsql `timestamptz` rejects `Unspecified` (and `Local`). Use `DateTimeOffset` in tool parameters and convert with `.UtcDateTime`. Don't use `ToLocalTime()` (shifts by the machine's offset).
+- L04: `Booking.At` stays `DateTime` — Npgsql writes `DateTimeOffset` to `timestamptz` only with offset 0.
+- L04: if the model leaves out the offset, .NET fills in the **machine's** offset (+04 locally, +00 on a server) — the `e.g. …+04:00` in the `[Description]` makes it include it.
+- L04: seed bookings are "tomorrow" relative to when the DB was created — reseed (`DELETE FROM "Bookings";` + `dotnet ef database update`) before a demo.
 - L02: the `Model` (appsettings) and `ApiKey` (secrets) merge into one `Gemini` section — read both via `IConfiguration`.
 - L07: without `AllowOutOfOrderMetadataProperties` deserializing from jsonb fails.
 - L08: Google.GenAI's own retry + the resilience handler = multiplied retries.

@@ -16,3 +16,7 @@
 - L03: no `?? throw` config check — skipped on purpose.
 - L03: sentiment moved from `AiDiagnosticsController` to a new `FeedbackController` (`api/feedback/ai/sentiment`); DTOs moved `Contracts/Diagnostics/` → `Contracts/Feedback/`; enum in `Enums/Sentiment.cs`. An exception to "a file never moves".
 - L03: parse output record is `BookingParseResponse` (in `Contracts/Bookings/`), pairs with `BookingParseRequest(Message)` — not `BookingDetails`.
+- L04: `chat` moved to a new `AssistantController` (`api/assistant/chat`), its DTOs to `Contracts/Assistant/`; `FeedbackController` route `api/feedback/ai` → `api/feedback`.
+- L04: tools in a top-level `Tools/` folder, split into `MenuTools` and `TableTools` (not one `Ai/Tools/RestaurantTools`); tool names `get_menu`, `check_availability`; the returned records live in the same files.
+- L04: the System prompt doesn't list tool rules and tool calls aren't logged by hand — kept simple on purpose.
+- L04: time handling is the lecture's real-world problem. Before: L01–L03 stored restaurant time with a fake `Z`. After: real UTC in the DB, `DateTimeOffset` at the edges, `TimeProvider.System` + `Extensions/TimeProviderExtensions` (`GetRestaurantNow`, `ToUtc`, `Asia/Tbilisi`). Replaces `DateTime.Now` in the `Parse` prompt and the fake-UTC seed.

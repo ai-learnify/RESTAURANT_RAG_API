@@ -35,7 +35,7 @@ Content-Type: application/json
 }
 
 ### L02 · chat — a normal question
-POST {{baseUrl}}/api/diagnostics/ai/chat
+POST {{baseUrl}}/api/assistant/chat
 Content-Type: application/json
 
 {
@@ -43,15 +43,15 @@ Content-Type: application/json
 }
 
 ### L02 · chat — another topic (should politely decline)
-POST {{baseUrl}}/api/diagnostics/ai/chat
+POST {{baseUrl}}/api/assistant/chat
 Content-Type: application/json
 
 {
   "message": "Write me a poem about the sea."
 }
 
-### L02 · chat — a price question (should not invent a price)
-POST {{baseUrl}}/api/diagnostics/ai/chat
+### L02 · chat — a price question (L02: no invented price · from L04: real price via get_menu)
+POST {{baseUrl}}/api/assistant/chat
 Content-Type: application/json
 
 {
@@ -59,7 +59,7 @@ Content-Type: application/json
 }
 
 ### L03 · sentiment — Positive (enum, no few-shot)
-POST {{baseUrl}}/api/feedback/ai/sentiment
+POST {{baseUrl}}/api/feedback/sentiment
 Content-Type: application/json
 
 {
@@ -67,7 +67,7 @@ Content-Type: application/json
 }
 
 ### L03 · sentiment — Negative (logs "SMS: notify the manager")
-POST {{baseUrl}}/api/feedback/ai/sentiment
+POST {{baseUrl}}/api/feedback/sentiment
 Content-Type: application/json
 
 {
@@ -75,14 +75,14 @@ Content-Type: application/json
 }
 
 ### L03 · sentiment — Mixed
-POST {{baseUrl}}/api/feedback/ai/sentiment
+POST {{baseUrl}}/api/feedback/sentiment
 Content-Type: application/json
 
 {
   "message": "Great wine, but the music was too loud."
 }
 
-### L03 · parse booking — complete (200)
+### L03 · parse booking — complete (200; from L04 "at" has +04:00)
 POST {{baseUrl}}/api/bookings/parse
 Content-Type: application/json
 
@@ -112,4 +112,39 @@ Content-Type: application/json
 
 {
   "message": "Two of us, tomorrow at 23:30"
+}
+
+
+### L04 · assistant chat — check_availability (tomorrow 20:00 → tables 4, 5, 7 booked → 2 free: 6, 8; the model sends …T20:00:00+04:00)
+# Bookings are seeded for "tomorrow" when the DB is created — reseed before the demo:
+# DELETE FROM "Bookings";  then  dotnet ef database update
+POST {{baseUrl}}/api/assistant/chat
+Content-Type: application/json
+
+{
+  "message": "There are four of us, tomorrow at 8 — do you have a table?"
+}
+
+### L04 · assistant chat — get_menu (real price: 14 GEL)
+POST {{baseUrl}}/api/assistant/chat
+Content-Type: application/json
+
+{
+  "message": "How much is lobio?"
+}
+
+### L04 · assistant chat — no tool needed
+POST {{baseUrl}}/api/assistant/chat
+Content-Type: application/json
+
+{
+  "message": "Hi, until what time are you open?"
+}
+
+### L04 · assistant chat — both tools
+POST {{baseUrl}}/api/assistant/chat
+Content-Type: application/json
+
+{
+  "message": "Two of us are coming on Saturday at 7. What vegetarian dishes do you have?"
 }
